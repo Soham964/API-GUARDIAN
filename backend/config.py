@@ -2,9 +2,7 @@ import os
 
 # Get DB URL
 uri = os.environ.get("DATABASE_URL", "sqlite:///api_guardian.db")
-
-# Fix postgres:// issue (Render compatibility)
-if uri.startswith("postgres://"):
+if uri and uri.startswith("postgres://"):
     uri = uri.replace("postgres://", "postgresql://", 1)
 
 class Config:

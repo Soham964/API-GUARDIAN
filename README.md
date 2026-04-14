@@ -159,9 +159,9 @@ pytest tests/ -v
 
 ## Deployment
 
-- **Backend**: [Render](https://render.com) — set `DATABASE_URL` and `GEMINI_API_KEY` as environment variables
-- **Frontend**: [Vercel](https://vercel.com) — set `VITE_API_URL` to your Render backend URL
-- **Database**: SQLite for dev; Render PostgreSQL (free tier) for production
+- **Backend**: Configure your preferred hosting provider and set required environment variables
+- **Frontend**: Configure `VITE_API_URL` to your backend base URL
+- **Database**: SQLite for development; choose a managed database if needed in production
 
 ---
 
