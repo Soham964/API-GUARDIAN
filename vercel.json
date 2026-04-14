@@ -1,45 +1,11 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "backend/api/index.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "15mb"
-      }
+  "experimentalServices": {
+    "frontend": {
+      "routePrefix": "/"
     },
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
+    "backend": {
+      "entrypoint": "backend",
+      "routePrefix": "/_/backend"
     }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "backend/api/index.py"
-    },
-    {
-      "src": "/contracts(.*)",
-      "dest": "backend/api/index.py"
-    },
-    {
-      "src": "/logs(.*)",
-      "dest": "backend/api/index.py"
-    },
-    {
-      "src": "/test(.*)",
-      "dest": "backend/api/index.py"
-    },
-    {
-      "src": "/health",
-      "dest": "backend/api/index.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "frontend/$1"
-    }
-  ]
+  }
 }
