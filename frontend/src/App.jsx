@@ -15,7 +15,7 @@ export default function App() {
   const [tab, setTab] = useState("Contracts");
   const [refresh, setRefresh] = useState(0);
   const [theme, setTheme] = useState(() =>
-    localStorage.getItem("theme") || "light"
+    localStorage.getItem("theme") || "dark"
   );
   const [contractCount, setContractCount] = useState(0);
 
