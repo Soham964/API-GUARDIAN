@@ -4,7 +4,7 @@ import os
 # Make backend/ importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-# Load .env for local dev — on Vercel, env vars come from the dashboard
+# Load .env for local dev
 try:
     from dotenv import load_dotenv
     load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"), override=False)
