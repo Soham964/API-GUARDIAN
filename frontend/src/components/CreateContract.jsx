@@ -56,10 +56,12 @@ export default function CreateContract({ onCreated }) {
     setStatus(null);
     const rawReq = form.request_schema.trim();
     const rawRes = form.response_schema.trim();
+    if (!rawRes) return setStatus({ ok: false, msg: "Response schema is required." });
     const reqSchema = rawReq === "" ? {} : parseSchema(rawReq);
-    const resSchema = rawRes === "" ? {} : parseSchema(rawRes);
+    const resSchema = parseSchema(rawRes);
     if (reqSchema === null) return setStatus({ ok: false, msg: "Request schema is not valid JSON." });
     if (resSchema === null) return setStatus({ ok: false, msg: "Response schema is not valid JSON." });
+    if (Object.keys(resSchema).length === 0) return setStatus({ ok: false, msg: "Response schema cannot be empty." });
     setLoading(true);
     const { ok, data } = await api.createContract({ endpoint: form.endpoint, method: form.method, request_schema: reqSchema, response_schema: resSchema });
     setLoading(false);
