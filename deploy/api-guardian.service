@@ -1,0 +1,14 @@
+[Unit]
+Description=API Guardian Flask Backend
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/app/backend
+Environment="PATH=/home/ubuntu/app/backend/venv/bin"
+ExecStart=/home/ubuntu/app/backend/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:5000 --timeout 120 "app:create_app()"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
