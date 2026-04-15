@@ -2,7 +2,7 @@
 
 ## Role of AI in This System
 
-AI (Google Gemini) is an **assistive tool only**. It is never in the critical path of correctness.
+AI (Groq — llama-3.1-8b-instant) is an **assistive tool only**. It is never in the critical path of correctness.
 
 ## What AI Is Allowed To Do
 
@@ -45,4 +45,4 @@ AI (Google Gemini) is an **assistive tool only**. It is never in the critical pa
 
 - AI may generate incorrect schemas — always review before saving.
 - AI explanations are informational only — the authoritative error is the validator output.
-- If `GEMINI_API_KEY` is missing, AI features return a clear error; the rest of the system is unaffected.
+- If `GROQ` is missing, AI features return a clear error; the rest of the system is unaffected.

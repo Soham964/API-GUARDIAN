@@ -1,12 +1,35 @@
 # API Contract Guardian
 
-Enforces strict API contracts between frontend and backend systems. Invalid requests are rejected before processing. Invalid responses never leave the server.
+A runtime API contract enforcement system. Registers request and response schemas for endpoints, then validates every request and response against them — rejecting mismatches before they reach business logic or leave the server.
+
+**Live demo:** http://3.110.190.226
 
 ---
 
-## Problem
+## What It Does
 
-Frontend and backend systems drift apart over time. A field gets renamed, a type changes, an endpoint is restructured — and the mismatch only surfaces at runtime, often in production. This system makes those mismatches fail loudly and immediately, at the boundary.
+Frontend and backend systems drift apart over time. A field gets renamed, a type changes, an endpoint is restructured — and the mismatch only surfaces at runtime, often in production.
+
+API Contract Guardian makes those mismatches **fail loudly and immediately**, at the boundary:
+
+- Register a contract (endpoint + method + request schema + response schema)
+- Every incoming request to that endpoint is validated against the request schema — invalid requests are rejected with a structured error before any business logic runs
+- Every outgoing response is validated against the response schema — invalid responses are blocked with a 500 before reaching the client
+- All failures are logged with full details for debugging
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, Vite |
+| Backend | Flask 3, Python 3.12 |
+| Database | SQLite (dev) / PostgreSQL (prod) |
+| ORM | SQLAlchemy + Flask-Migrate |
+| AI | Groq (llama-3.1-8b) via OpenAI-compatible API |
+| Server | Gunicorn + Nginx |
+| Hosting | AWS EC2 (t3.micro) |
 
 ---
 
@@ -15,9 +38,11 @@ Frontend and backend systems drift apart over time. A field gets renamed, a type
 ```
 Frontend (React)
       ↓
+Nginx                 — serves frontend, proxies API routes to Flask
+      ↓
 Flask Routes          — thin, request/response handling only
       ↓
-Middleware             — STRICT validation layer (before_request / after_request)
+Middleware            — STRICT validation layer (before_request / after_request)
       ↓
 Service Layer         — business logic (contract_service, log_service)
       ↓
@@ -25,7 +50,7 @@ Validator Layer       — deterministic schema checking (no AI)
       ↓
 Database              — contracts + validation failure logs
       ↓
-AI Layer              — Gemini, assistive only (schema gen + error explanation)
+AI Layer              — Groq, assistive only (schema gen + error explanation)
 ```
 
 ---
@@ -34,68 +59,66 @@ AI Layer              — Gemini, assistive only (schema gen + error explanation
 
 ```
 backend/
-  app.py                  — app factory, middleware registration
-  config.py               — environment config
-  db.py                   — SQLAlchemy + Flask-Migrate init
+  app.py                    — app factory, middleware registration
+  config.py                 — environment config
+  db.py                     — SQLAlchemy + Flask-Migrate init
   models/
-    contract.py           — Contract model
-    log.py                — ValidationLog model
+    contract.py             — Contract model
+    log.py                  — ValidationLog model
   routes/
-    contract_routes.py    — CRUD for contracts + log listing
-    test_routes.py        — test/validate endpoint
-    ai_routes.py          — AI schema gen + error explanation
+    contract_routes.py      — CRUD for contracts + log listing
+    test_routes.py          — test/validate endpoint
+    ai_routes.py            — AI schema generation + error explanation
   middleware/
-    contract_middleware.py — before_request / after_request hooks
+    contract_middleware.py  — before_request / after_request enforcement hooks
   services/
-    contract_service.py   — contract DB operations
-    log_service.py        — log DB operations
-    ai_service.py         — Gemini integration (constrained)
+    contract_service.py     — contract DB operations
+    log_service.py          — log DB operations
+    ai_service.py           — Groq AI integration (constrained, assistive only)
   validators/
-    schema_validator.py   — deterministic payload validation
+    schema_validator.py     — deterministic payload validation (no AI)
   tests/
-    test_validation.py    — pytest test suite
+    test_validation.py      — pytest test suite
 
 frontend/
   src/
-    api.js                — fetch wrapper
-    App.jsx               — tab navigation
+    api.js                  — fetch wrapper
+    App.jsx                 — tab navigation
     components/
-      ContractList.jsx    — list + delete contracts
-      CreateContract.jsx  — create contract + AI schema gen
-      TestPanel.jsx       — validate payloads against a contract
-      LogViewer.jsx       — view validation failure logs
+      ContractList.jsx      — list + delete contracts
+      CreateContract.jsx    — create contract form + AI schema generator
+      LogViewer.jsx         — view validation failure logs
+
+deploy/
+  setup.sh                  — one-time EC2 setup script
+  update.sh                 — pull latest code and restart services
+  api-guardian.service      — systemd service definition for gunicorn
+  nginx.conf                — nginx config (frontend + API proxy)
 ```
 
 ---
 
-## Design Decisions
+## Key Design Decisions
 
-### 1. Middleware as the enforcement layer
-Validation runs in `before_request` and `after_request` hooks — not inside route handlers. This means no route can accidentally skip validation. Routes stay thin and focused on response construction.
+**Middleware as the enforcement layer** — Validation runs in `before_request` and `after_request` hooks, not inside route handlers. No route can accidentally skip validation. Routes stay thin.
 
-### 2. Contracts stored in the database
-Contracts are not hardcoded. Adding or changing a contract requires no code change. This makes the system resilient to endpoint evolution and allows runtime contract management.
+**Contracts stored in the database** — Not hardcoded. Adding or changing a contract requires no code change, no redeploy. Managed at runtime through the UI.
 
-### 3. Deterministic validator — no AI
-`schema_validator.py` is pure Python with no external dependencies. It checks required fields and data types. It is the source of truth for correctness. AI is explicitly excluded from this layer.
+**Deterministic validator, no AI** — `schema_validator.py` is pure Python with zero external dependencies. It is the source of truth for correctness. AI is explicitly excluded from this layer.
 
-### 4. AI is constrained and verified
-Gemini is called only for schema generation and error explanation. Every AI response is validated by `_validate_schema_structure` before use. If AI fails or returns garbage, the system falls back gracefully. The rest of the system is unaffected.
+**AI is constrained and verified** — AI is used only for schema generation and error explanation. Every AI response is validated by `_validate_schema_structure` before use. If AI fails, the system falls back gracefully and continues working.
 
-### 5. Internal routes bypass middleware
-Routes under `/contracts`, `/logs`, `/ai`, `/test`, and `/health` are the guardian system itself. They are excluded from contract enforcement to avoid circular validation.
+**Internal routes bypass enforcement** — Routes under `/contracts`, `/logs`, `/ai`, `/test`, and `/health` are the guardian system itself. They are excluded from contract enforcement to avoid circular validation.
 
 ---
 
 ## Schema Format
 
-Schemas are JSON objects where each key is a field name:
-
 ```json
 {
   "name":  { "type": "string",  "required": true  },
-  "age":   { "type": "integer", "required": true  },
-  "email": { "type": "string",  "required": false }
+  "age":   { "type": "integer", "required": false },
+  "email": { "type": "string",  "required": true  }
 }
 ```
 
@@ -107,33 +130,29 @@ Supported types: `string`, `integer`, `float`, `boolean`, `list`, `dict`
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/contracts` | List all contracts |
-| POST | `/contracts` | Create a contract |
-| DELETE | `/contracts/:id` | Delete a contract |
-| GET | `/logs` | List validation failure logs |
-| POST | `/test/validate` | Validate a payload against a contract |
-| POST | `/ai/generate-schema` | Generate a schema from plain English |
-| POST | `/ai/explain-error` | Explain a validation error |
-| GET | `/health` | Health check |
+| `GET` | `/contracts` | List all registered contracts |
+| `POST` | `/contracts` | Register a new contract |
+| `DELETE` | `/contracts/:id` | Delete a contract |
+| `GET` | `/logs` | List validation failure logs |
+| `POST` | `/test/validate` | Validate a payload against a contract |
+| `POST` | `/ai/generate-schema` | Generate a schema from plain English |
+| `POST` | `/ai/explain-error` | Explain a validation error in plain English |
+| `GET` | `/health` | Health check |
 
 ---
 
-## Setup
+## Local Setup
 
 ### Backend
 
 ```bash
 cd backend
+python3 -m venv venv
+source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Set environment variables
-export GEMINI_API_KEY=your_key_here
-export DATABASE_URL=sqlite:///api_guardian.db   # or postgresql://...
-
-# Initialize DB
-flask --app app db init
-flask --app app db migrate -m "initial"
-flask --app app db upgrade
+# Create .env
+cp .env.example .env          # set GROQ_API_KEY and DATABASE_URL
 
 # Run
 python app.py
@@ -143,10 +162,11 @@ python app.py
 
 ```bash
 cd frontend
-cp .env.example .env          # set VITE_API_URL if backend is not on localhost:5000
 npm install
 npm run dev
 ```
+
+The frontend proxies API calls to `http://localhost:5000` by default.
 
 ### Tests
 
@@ -157,11 +177,29 @@ pytest tests/ -v
 
 ---
 
-## Deployment
+## Production Deployment (AWS EC2)
 
-- **Backend**: Configure your preferred hosting provider and set required environment variables
-- **Frontend**: Configure `VITE_API_URL` to your backend base URL
-- **Database**: SQLite for development; choose a managed database if needed in production
+The app runs on a single EC2 t3.micro instance with Nginx + Gunicorn.
+
+**First-time setup on a fresh Ubuntu 22.04 instance:**
+
+```bash
+git clone https://github.com/Soham964/API-GUARDIAN.git /home/ubuntu/app
+cd /home/ubuntu/app
+bash deploy/setup.sh
+```
+
+Then edit `/home/ubuntu/app/backend/.env` with your real credentials and restart:
+
+```bash
+sudo systemctl restart api-guardian
+```
+
+**To deploy updates:**
+
+```bash
+bash /home/ubuntu/app/deploy/update.sh
+```
 
 ---
 
@@ -169,34 +207,27 @@ pytest tests/ -v
 
 See [agents.md](./agents.md) for full AI rules and safety constraints.
 
-**Summary**: AI generates schemas and explains errors. It never validates requests, never writes to the database, and is never trusted without verification. If AI is unavailable, the system continues to function correctly.
+AI generates schemas from plain English descriptions and explains validation errors in human-readable terms. It never validates requests, never writes to the database, and is never trusted without verification. If AI is unavailable, the rest of the system is completely unaffected.
 
 ---
 
-## Tradeoffs
+## Limitations & Known Tradeoffs
 
-| Decision | Benefit | Cost |
-|----------|---------|------|
-| SQLite default | Zero setup for dev | Not suitable for high-concurrency prod |
-| Simple schema format (not JSON Schema) | Easy to read and write | Less expressive than full JSON Schema |
-| Middleware validates all non-internal routes | Consistent enforcement | Requires contracts to be registered before use |
-| AI output validated and stripped | Safe, predictable | AI-generated schemas may lose fields with unknown types |
-
----
-
-## Risks & Limitations
-
-- **No authentication** — the contract management API is open. Add auth before exposing to the internet.
-- **Schema format is custom** — not JSON Schema / OpenAPI. Interop with other tools requires a converter.
-- **Response validation rewrites the response** — if a service returns a valid but unexpected shape, it will be blocked. Contracts must be kept up to date.
-- **AI schema generation is best-effort** — always review AI-generated schemas before saving.
+| Area | Note |
+|------|------|
+| Authentication | The contract management API is open — add auth before exposing to the internet |
+| Schema format | Custom format, not JSON Schema / OpenAPI — not directly interoperable with other tooling |
+| Response validation | Contracts must be kept up to date — a valid but unexpected response shape will be blocked |
+| AI generation | Best-effort — always review AI-generated schemas before saving |
+| SQLite | Fine for development and low-traffic production; switch to PostgreSQL for higher concurrency |
 
 ---
 
-## Extensions
+## Possible Extensions
 
-- Add JWT authentication to the contract management API
-- Support JSON Schema / OpenAPI as the schema format
-- Add a diff view when a contract changes
+- JWT authentication on the contract management API
+- JSON Schema / OpenAPI import and export
+- Diff view when a contract is updated
 - Webhook notifications on validation failures
-- Per-endpoint validation toggle (warn vs. reject mode)
+- Per-endpoint warn vs. reject mode toggle
+- Contract versioning
